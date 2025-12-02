@@ -20,8 +20,9 @@ import {
   PromptInputAction,
 } from "@/components/ui/prompt-input";
 import { Button } from "@/components/ui/button";
+import { PromptSuggestion } from "@/components/ui/prompt-suggestion";
 import { ScrollButton } from "@/components/ui/scroll-button";
-import { Send, Loader2, FileText } from "lucide-react";
+import { Send, Loader2, FileText, Lightbulb } from "lucide-react";
 
 export default function Page() {
   const [inputText, setInputText] = useState("");
@@ -42,6 +43,37 @@ export default function Page() {
       role: "user",
       parts: [{ type: "text", text: message }],
     });
+  };
+
+  const handleSuggestionClick = async (suggestion: string) => {
+    await sendMessage({
+      role: "user",
+      parts: [{ type: "text", text: suggestion }],
+    });
+  };
+
+  // Default suggestions for empty state
+  const defaultSuggestions = [
+    "What are the key topics covered?",
+    "Summarize the main points",
+    "What are the next steps?",
+    "How does this relate to...",
+  ];
+
+  // Generate follow-up suggestions based on the last assistant message
+  const getFollowUpSuggestions = () => {
+    const lastAssistantMessage = [...messages]
+      .reverse()
+      .find((m) => m.role === "assistant");
+
+    if (!lastAssistantMessage) return [];
+
+    return [
+      "Tell me more about this",
+      "How can I apply this?",
+      "What are the next steps?",
+      "Are there any examples?",
+    ];
   };
 
   return (
@@ -74,32 +106,75 @@ export default function Page() {
                   search through your documents and provide relevant
                   information.
                 </p>
+
+                {/* Initial Suggestions */}
+                <div className="mt-8 w-full max-w-md">
+                  <div className="mb-3 flex items-center justify-center gap-2 text-xs text-muted-foreground">
+                    <Lightbulb className="h-3 w-3" />
+                    Try one of these suggestions
+                  </div>
+                  <div className="space-y-2">
+                    {defaultSuggestions.map((suggestion, idx) => (
+                      <PromptSuggestion
+                        key={idx}
+                        onClick={() => handleSuggestionClick(suggestion)}
+                      >
+                        {suggestion}
+                      </PromptSuggestion>
+                    ))}
+                  </div>
+                </div>
               </div>
             ) : (
-              messages.map((message) => (
-                <div key={message.id} className="space-y-3">
-                  <Message>
-                    <MessageAvatar
-                      src={
-                        message.role === "user"
-                          ? "/user-avatar.png"
-                          : "/ai-avatar.png"
-                      }
-                      alt={message.role === "user" ? "User" : "AI Assistant"}
-                      fallback={message.role === "user" ? "U" : "AI"}
-                    />
-                    <div className="flex-1 space-y-2">
-                      <MessageContent markdown={message.role === "assistant"}>
-                        {message.parts
-                          ?.map((part) =>
-                            part.type === "text" ? part.text : "",
-                          )
-                          .join("") || ""}
-                      </MessageContent>
+              <>
+                {messages.map((message) => (
+                  <div key={message.id} className="space-y-3">
+                    <Message>
+                      <MessageAvatar
+                        src={
+                          message.role === "user"
+                            ? "/user-avatar.png"
+                            : "/ai-avatar.png"
+                        }
+                        alt={message.role === "user" ? "User" : "AI Assistant"}
+                        fallback={message.role === "user" ? "U" : "AI"}
+                      />
+                      <div className="flex-1 space-y-2">
+                        <MessageContent markdown={message.role === "assistant"}>
+                          {message.parts
+                            ?.map((part) =>
+                              part.type === "text" ? part.text : "",
+                            )
+                            .join("") || ""}
+                        </MessageContent>
+                      </div>
+                    </Message>
+                  </div>
+                ))}
+
+                {/* Follow-up Suggestions - shown after assistant response and not streaming */}
+                {!(status === "streaming") &&
+                  messages.length > 0 &&
+                  messages[messages.length - 1]?.role === "assistant" && (
+                    <div className="space-y-3">
+                      <div className="flex items-center gap-2 text-xs text-muted-foreground">
+                        <Lightbulb className="h-3 w-3" />
+                        Follow-up questions
+                      </div>
+                      <div className="space-y-2">
+                        {getFollowUpSuggestions().map((suggestion, idx) => (
+                          <PromptSuggestion
+                            key={idx}
+                            onClick={() => handleSuggestionClick(suggestion)}
+                            size="sm"
+                          >
+                            {suggestion}
+                          </PromptSuggestion>
+                        ))}
+                      </div>
                     </div>
-                  </Message>
-                </div>
-              ))
+                  )}
+              </>
             )}
 
             {status === "streaming" && (
