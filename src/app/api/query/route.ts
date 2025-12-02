@@ -17,12 +17,8 @@ const ollama = createOllama({
 });
 
 export async function POST(req: NextRequest) {
-  console.log('----hello---')
-
   try {
     const { messages }: { messages: UIMessage[] } = await req.json();
-
-    console.log(messages);
 
     if (!messages || messages.length === 0) {
       return new Response(

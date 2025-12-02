@@ -1,4 +1,3 @@
-// scripts/ingest.js
 import { PDFLoader } from "@langchain/community/document_loaders/fs/pdf";
 import { RecursiveCharacterTextSplitter } from "@langchain/textsplitters";
 import { OllamaEmbeddings } from "@langchain/ollama";
@@ -9,10 +8,12 @@ import path from "path";
 
 const CHROMA_URL = process.env.CHROMA_URL || "http://localhost:8000";
 const OLLAMA_URL = process.env.OLLAMA_URL || "http://localhost:11434";
-const COLLECTION_NAME = "my_documents";
-const DOCS_DIR = "/app/documents";
+const EMBEDDING_MODEL = process.env.EMBEDDING_MODEL || "nomic-embed-text";
+const COLLECTION_NAME = process.env.COLLECTION_NAME || "my_documents";
+const DOCS_DIR = fs.existsSync("/app/documents")
+  ? "/app/documents"
+  : "./documents";
 
-// Sanitize metadata for ChromaDB (only flat string/number/boolean allowed)
 function sanitizeMetadata(metadata) {
   const clean = {};
   for (const [key, value] of Object.entries(metadata)) {
@@ -22,10 +23,7 @@ function sanitizeMetadata(metadata) {
       typeof value === "boolean"
     ) {
       clean[key] = value;
-    } else if (value === null || value === undefined) {
-      // Skip null/undefined
-    } else if (typeof value === "object") {
-      // Flatten nested objects like loc.pageNumber
+    } else if (value && typeof value === "object") {
       for (const [nestedKey, nestedValue] of Object.entries(value)) {
         if (
           typeof nestedValue === "string" ||
@@ -44,6 +42,8 @@ async function ingestPDFs() {
   console.log("🚀 Starting PDF ingestion...");
   console.log(`   ChromaDB: ${CHROMA_URL}`);
   console.log(`   Ollama: ${OLLAMA_URL}`);
+  console.log(`   Embedding Model: ${EMBEDDING_MODEL}`);
+  console.log(`   Collection: ${COLLECTION_NAME}`);
 
   // Check if already ingested
   try {
@@ -52,25 +52,23 @@ async function ingestPDFs() {
     const count = await collection.count();
 
     if (count > 0) {
-      console.log(
-        `\n✅ Collection already has ${count} documents. Skipping ingestion.`,
-      );
+      console.log(`\n✅ Collection already has ${count} documents. Skipping.`);
       process.exit(0);
     }
   } catch (e) {
-    console.log("   No existing collection found. Will create new one.");
+    console.log("   No existing collection. Will create new one.");
   }
 
-  // Get PDF files
+  // Check for PDFs
   if (!fs.existsSync(DOCS_DIR)) {
-    console.log(`❌ Documents directory not found: ${DOCS_DIR}`);
-    process.exit(1);
+    console.log(`⚠️  Documents directory not found: ${DOCS_DIR}`);
+    process.exit(0);
   }
 
   const pdfFiles = fs.readdirSync(DOCS_DIR).filter((f) => f.endsWith(".pdf"));
 
   if (pdfFiles.length === 0) {
-    console.log("⚠️  No PDF files found. Skipping ingestion.");
+    console.log("⚠️  No PDF files found. Skipping.");
     process.exit(0);
   }
 
@@ -79,7 +77,6 @@ async function ingestPDFs() {
 
   // Load PDFs
   const allDocs = [];
-
   for (const pdfFile of pdfFiles) {
     const filePath = path.join(DOCS_DIR, pdfFile);
     console.log(`\n📖 Loading: ${pdfFile}`);
@@ -91,11 +88,11 @@ async function ingestPDFs() {
       console.log(`   ✓ Loaded ${docs.length} pages`);
       allDocs.push(...docs);
     } catch (error) {
-      console.error(`   ✗ Error loading ${pdfFile}:`, error.message);
+      console.error(`   ✗ Error: ${error.message}`);
     }
   }
 
-  console.log(`\n📚 Total pages loaded: ${allDocs.length}`);
+  console.log(`\n📚 Total pages: ${allDocs.length}`);
 
   // Split into chunks
   console.log("\n✂️  Splitting into chunks...");
@@ -103,21 +100,18 @@ async function ingestPDFs() {
     chunkSize: 1000,
     chunkOverlap: 200,
   });
-
   const chunks = await splitter.splitDocuments(allDocs);
   console.log(`   ✓ Created ${chunks.length} chunks`);
 
-  // Sanitize metadata for ChromaDB
-  console.log("\n🧹 Sanitizing metadata...");
+  // Sanitize metadata
   chunks.forEach((chunk) => {
     chunk.metadata = sanitizeMetadata(chunk.metadata);
   });
-  console.log("   ✓ Metadata cleaned");
 
   // Create embeddings
-  console.log("\n🧠 Creating embeddings with Ollama...");
+  console.log(`\n🧠 Creating embeddings with ${EMBEDDING_MODEL}...`);
   const embeddings = new OllamaEmbeddings({
-    model: "nomic-embed-text",
+    model: EMBEDDING_MODEL,
     baseUrl: OLLAMA_URL,
   });
 
@@ -125,10 +119,11 @@ async function ingestPDFs() {
     await embeddings.embedQuery("test");
     console.log("   ✓ Ollama connection successful");
   } catch (error) {
-    console.error("   ✗ Ollama connection failed:", error.message);
+    console.error("   ✗ Ollama failed:", error.message);
     process.exit(1);
   }
 
+  // Store in ChromaDB
   console.log("\n💾 Storing in ChromaDB...");
   await Chroma.fromDocuments(chunks, embeddings, {
     collectionName: COLLECTION_NAME,
@@ -138,7 +133,7 @@ async function ingestPDFs() {
 
   console.log("\n✅ Ingestion complete!");
   console.log(`   Collection: ${COLLECTION_NAME}`);
-  console.log(`   Total chunks: ${chunks.length}`);
+  console.log(`   Chunks: ${chunks.length}`);
 }
 
 ingestPDFs().catch((error) => {

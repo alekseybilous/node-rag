@@ -32,8 +32,6 @@ export default function Page() {
     }),
   });
 
-  console.log(status);
-
   const handleSubmit = async (e?: React.FormEvent) => {
     if (e) e.preventDefault();
     if (!inputText.trim() || status === "streaming") return;

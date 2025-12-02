@@ -35,9 +35,8 @@ services:
     volumes:
       - ./documents:/app/documents
       - ./scripts:/app/scripts
-    environment:
-      - CHROMA_URL=http://chromadb:8000
-      - OLLAMA_URL=http://ollama:11434
+    env_file:
+      - .env.local
     depends_on:
       chromadb:
         condition: service_healthy
@@ -55,9 +54,8 @@ services:
     volumes:
       - ./src:/app/src
       - ./public:/app/public
-    environment:
-      - CHROMA_URL=http://chromadb:8000
-      - OLLAMA_URL=http://ollama:11434
+    env_file:
+      - .env.local
     depends_on:
       chromadb:
         condition: service_healthy

@@ -11,5 +11,4 @@ COPY . .
 
 EXPOSE 3000
 
-# Important: -H 0.0.0.0 makes it accessible from outside container
 CMD ["npm", "run", "dev", "--", "-H", "0.0.0.0"]
