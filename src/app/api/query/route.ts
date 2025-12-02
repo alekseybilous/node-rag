@@ -2,7 +2,7 @@
 import { NextRequest } from "next/server";
 import { OllamaEmbeddings } from "@langchain/ollama";
 import { Chroma } from "@langchain/community/vectorstores/chroma";
-import { streamText, convertToModelMessages } from "ai";
+import { streamText, convertToModelMessages,  } from "ai";
 import { createOllama } from "ollama-ai-provider-v2";
 import { UIMessage } from "ai";
 
