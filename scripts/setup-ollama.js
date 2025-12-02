@@ -1,36 +1,17 @@
 const OLLAMA_URL = process.env.OLLAMA_URL || "http://localhost:11434";
-const MODEL = "nomic-embed-text";
+const MODELS = [
+  "nomic-embed-text",
+  process.env.LLM_MODEL || "mistral"
+];
 
-async function setupOllama() {
-  console.log("🚀 Setting up Ollama embedding model...");
-  console.log(`   URL: ${OLLAMA_URL}`);
-  console.log(`   Model: ${MODEL}`);
-
-  // Check if Ollama is running
-  try {
-    const response = await fetch(`${OLLAMA_URL}/api/tags`);
-    if (!response.ok) throw new Error("Ollama not responding");
-
-    const data = await response.json();
-    const modelExists = data.models?.some((m) => m.name.includes(MODEL));
-
-    if (modelExists) {
-      console.log(`   ✓ Model ${MODEL} already exists. Skipping download.`);
-      return;
-    }
-  } catch (error) {
-    console.error("   ✗ Cannot connect to Ollama:", error.message);
-    process.exit(1);
-  }
-
-  // Pull the model
-  console.log(`\n📥 Pulling ${MODEL}... (this may take a few minutes)`);
+async function pullModel(model) {
+  console.log(`\n📥 Pulling ${model}... (this may take a few minutes)`);
 
   try {
     const response = await fetch(`${OLLAMA_URL}/api/pull`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ name: MODEL }),
+      body: JSON.stringify({ name: model }),
     });
 
     const reader = response.body.getReader();
@@ -53,9 +34,40 @@ async function setupOllama() {
       }
     }
 
-    console.log(`\n\n✅ Model ${MODEL} is ready!`);
+    console.log(`\n✅ Model ${model} is ready!`);
   } catch (error) {
-    console.error("\n✗ Error pulling model:", error.message);
+    console.error(`\n✗ Error pulling model ${model}:`, error.message);
+    process.exit(1);
+  }
+}
+
+async function setupOllama() {
+  console.log("🚀 Setting up Ollama models...");
+  console.log(`   URL: ${OLLAMA_URL}`);
+  console.log(`   Models to setup: ${MODELS.join(", ")}`);
+
+  // Check if Ollama is running
+  try {
+    const response = await fetch(`${OLLAMA_URL}/api/tags`);
+    if (!response.ok) throw new Error("Ollama not responding");
+
+    const data = await response.json();
+    const existingModels = data.models?.map((m) => m.name.split(":")[0]) || [];
+
+    const modelsToInstall = MODELS.filter(
+      (model) => !existingModels.some((existing) => existing === model.split(":")[0])
+    );
+
+    if (modelsToInstall.length === 0) {
+      console.log("   ✓ All required models already exist. Skipping download.");
+      return;
+    }
+
+    for (const model of modelsToInstall) {
+      await pullModel(model);
+    }
+  } catch (error) {
+    console.error("   ✗ Cannot connect to Ollama:", error.message);
     process.exit(1);
   }
 }
